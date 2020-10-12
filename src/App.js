@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from "react";
+
+//import { Grid, Header, Container, Button, Input, Select } from 'semantic-ui-react';
+//import 'semantic-ui-css/semantic.min.css';
+
 import './App.css';
 import Web3 from 'web3'
 import Biconomy from "@biconomy/mexa";
@@ -15,6 +19,7 @@ const showSuccessMessage = message => {
 const showInfoMessage = message => {
   NotificationManager.info(message, "Info", 3000);
 };
+
 
 let contract;
 let ercContract;
@@ -45,6 +50,14 @@ function App() {
 
   const [token, setToken] = useState("This is a default token");
   const [newToken, setNewToken] = useState("");
+
+  const [quantity, setQuantity] = useState("This is a default quantity");
+  const [newQuantity, setNewQuantity] = useState("");  
+
+  const [unlockDate, setUnlockDate] = useState("blank");
+  const [newUnlockDate, setNewUnlockDate] = useState("");
+
+
   useEffect(() => {
 
 
@@ -72,12 +85,25 @@ function App() {
 
 
     const onTokenChange = event => {
+      //console.log(event.target.value);
       setNewToken(event.target.value);
+      console.log(newToken);
+    };
+
+    const onQuantityChange = event => {
+      console.log(event.target);
+      setNewQuantity(event.target.value);
     };
 
   async function startApp() {
-    const result = ''; // await contract.methods.info().call({ from: window.ethereum.selectedAddress });
+    const result = await contract.methods.info().call({ from: window.ethereum.selectedAddress });
+    console.log(result);
+    var utcSeconds = result[2];
+    let dt = new Date(0); // The 0 there is the key, which sets the date to the epoch
+    dt.setUTCSeconds(utcSeconds);
+    setUnlockDate(dt);
     //any getter display operations from contract like lock expiry and recipient address
+    console.log(dt);
   }
   async function onButtonClickClaimEth() {
     console.log(window.ethereum.selectedAddress);
@@ -148,50 +174,74 @@ function App() {
 
   async function onButtonClickDeposit() {
     console.log(window.ethereum.selectedAddress);
-    //const { web3 } = window;
+    
+    return new Promise((resolve, reject) => {
 
-    window.web3.currentProvider.sendAsync(
-      {
+      const { web3 } = window;
+
+      web3.currentProvider.sendAsync({
         
         jsonrpc: "2.0",
         id: 88888888888,
         method: "eth_sendTransaction",
-        params: [{"from": window.ethereum.selectedAddress, "to": config.contract.address, "value": web3.utils.toWei('1', 'ether')}]
-      },
-      async function (err, result) {
-        if (err) {
-          return console.error(err);
-        }
-        console.log(result);
-      });
+        params: [{"from": window.ethereum.selectedAddress, "to": config.contract.address, "value": web3.toWei((newQuantity*0.00005),'ether')}]
+      }, async (err, result) => {
+              if(!err){
+                  console.log(result);
+                  resolve(result);
+              } else {
+                  reject(err);
+              }
+          });
+  })
+
   }
 
-  async function onButtonClickDepositERC20(tokenAddr) {
+  async function onButtonClickDepositERC20() {
     console.log(window.ethereum.selectedAddress);
     // look in config based on drop down option
+    console.log(token);
 
-    tokenAddr = "0x1f9061B953bBa0E36BF50F21876132DcF276fC6e";
-    ercContract = new web3.eth.Contract(config.erc20.abi, tokenAddr);
+   //tokenAddr = "0x1f9061B953bBa0E36BF50F21876132DcF276fC6e";
+    ercContract = new web3.eth.Contract(config.erc20.abi, newToken);
     
-    const promiEvent = ercContract.methods
-    .transfer(config.contract.address, 10)
-    .send({
-      from: window.ethereum.selectedAddress
-    })
+    return new Promise((resolve, reject) => {
 
-    promiEvent.on("transactionHash", (hash) => {
-    showInfoMessage("Transaction sent successfully. Check Console for Transaction hash")
-    console.log("Transaction Hash is ", hash)
-    }).once("confirmation", (confirmationNumber, receipt) => {
-      if (receipt.status) {
-      showSuccessMessage("Transaction processed successfully")
-      startApp()
-      } 
-      else {
-      showErrorMessage("Transaction Failed");
-      }
-    })
+      const { web3 } = window;
+
+      const ErcContract = web3.eth.contract(config.erc20.abi).at(newToken);
+
+      ErcContract.transfer(config.contract.address, newQuantity, {
+          from: window.ethereum.selectedAddress
+          }, async (err, transactionHash) => {
+              if(!err){
+                  console.log(transactionHash);
+                  const receipt = await fetchMinedTransactionReceipt(transactionHash);
+                  resolve(receipt);
+              } else {
+                  reject(err);
+              }
+          });
+  })
     
+  }
+
+  const fetchMinedTransactionReceipt = (transactionHash) => {
+
+    return new Promise((resolve, reject) => {
+      
+      const { web3 } = window;
+  
+      var timer = setInterval(()=> {
+        web3.eth.getTransactionReceipt(transactionHash, (err, receipt)=> {
+          if(!err && receipt){
+            clearInterval(timer);
+            resolve(receipt);
+          }
+        });
+      }, 2000)
+     
+    })
   }
 
 
@@ -268,14 +318,22 @@ function App() {
             <blockquote cite="http://www.gutenberg.org/ebboks/11">
               <h4>please deposit some tokens/ether first to this address below</h4>
               <h5>0xD43Da7616C7F82321888D2Bb5e01C8366C766a04</h5>
-            </blockquote>
+              
+             </blockquote>
           </div>
 
           <div className="mb-attribution">
           </div>
         </section>
-
         <section>
+        <div><input size="10"
+                border-radius="15"
+                type="text"
+                placeholder="Enter amount"
+                onChange={onQuantityChange}
+                value={newQuantity}
+              />
+          </div>
           <div className="submit-row">
              <button type="button" className="button" onClick={onButtonClickDeposit}>Deposit</button>            
           </div>
@@ -283,8 +341,26 @@ function App() {
 
 
         <section>
+        <div><input size="40"
+                border-radius="15"
+                type="text"
+                placeholder="Enter ERC20 token address"
+                onChange={onTokenChange}
+                value={newToken}
+              />
+          </div>
+          <div><input size="10"
+                border-radius="15"
+                type="text"
+                placeholder="Enter Quantity"
+                onChange={onQuantityChange}
+                value={newQuantity}
+              />
+          </div>
+         </section>
+         <section> 
           <div className="submit-row">
-             <button type="button" className="button" onClick={onButtonClickDepositERC20}>Deposit ERC20</button>            
+             <button type="button" align="center" className="button" onClick={onButtonClickDepositERC20}>Deposit tokens</button>            
           </div>
         </section>
 
@@ -314,5 +390,6 @@ function App() {
     </div >
   );
 }
+
 
 export default App;
