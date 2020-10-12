@@ -17,6 +17,8 @@ const showInfoMessage = message => {
 };
 
 let contract;
+let ercContract;
+
 let domainData = {
   name: "SimpleTimeLocked",
   version: "1",
@@ -137,16 +139,65 @@ function App() {
             showSuccessMessage("Transaction processed successfully")
             startApp()
           } else {
-            showErrorMessage("Transaction Failed");
+            showErrorMessage("Transaction Failed. Only recipient can claim funds from this wallet");
           }
         })
       }
     );
   }
 
+  async function onButtonClickDeposit() {
+    console.log(window.ethereum.selectedAddress);
+    //const { web3 } = window;
+
+    window.web3.currentProvider.sendAsync(
+      {
+        
+        jsonrpc: "2.0",
+        id: 88888888888,
+        method: "eth_sendTransaction",
+        params: [{"from": window.ethereum.selectedAddress, "to": config.contract.address, "value": web3.utils.toWei('1', 'ether')}]
+      },
+      async function (err, result) {
+        if (err) {
+          return console.error(err);
+        }
+        console.log(result);
+      });
+  }
+
+  async function onButtonClickDepositERC20(tokenAddr) {
+    console.log(window.ethereum.selectedAddress);
+    // look in config based on drop down option
+
+    tokenAddr = "0x1f9061B953bBa0E36BF50F21876132DcF276fC6e";
+    ercContract = new web3.eth.Contract(config.erc20.abi, tokenAddr);
+    
+    const promiEvent = ercContract.methods
+    .transfer(config.contract.address, 10)
+    .send({
+      from: window.ethereum.selectedAddress
+    })
+
+    promiEvent.on("transactionHash", (hash) => {
+    showInfoMessage("Transaction sent successfully. Check Console for Transaction hash")
+    console.log("Transaction Hash is ", hash)
+    }).once("confirmation", (confirmationNumber, receipt) => {
+      if (receipt.status) {
+      showSuccessMessage("Transaction processed successfully")
+      startApp()
+      } 
+      else {
+      showErrorMessage("Transaction Failed");
+      }
+    })
+    
+  }
+
+
   async function onButtonClickClaimERC20() {
     console.log(window.ethereum.selectedAddress)
-    setNewToken("");
+    //setNewToken("");
     console.log(contract)
     let nonce = await contract.methods.getNonce(window.ethereum.selectedAddress).call();
     let message = {};
@@ -216,19 +267,35 @@ function App() {
           <div className="mb-wrap mb-style-2">
             <blockquote cite="http://www.gutenberg.org/ebboks/11">
               <h4>please deposit some tokens/ether first to this address below</h4>
-              <h5>0xC896E42ccbb706D651D3C81aEeeD0C33d3E0CadC</h5>
+              <h5>0xD43Da7616C7F82321888D2Bb5e01C8366C766a04</h5>
             </blockquote>
           </div>
 
           <div className="mb-attribution">
           </div>
         </section>
+
+        <section>
+          <div className="submit-row">
+             <button type="button" className="button" onClick={onButtonClickDeposit}>Deposit</button>            
+          </div>
+        </section>
+
+
+        <section>
+          <div className="submit-row">
+             <button type="button" className="button" onClick={onButtonClickDepositERC20}>Deposit ERC20</button>            
+          </div>
+        </section>
+
         <section>
           <div className="submit-container">
+            <h5>only intended recipient can do below actions after locking period</h5>
             <div className="submit-row">
+
               
               <button type="button" className="button" onClick={onButtonClickClaimEth}>Claim All Ether</button>
-              <h5>only intended recipient can do this action after locking period</h5>
+              
             </div>
             <div className="submit-row">
               <input size="100"
